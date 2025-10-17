@@ -39,7 +39,7 @@ export default function RootLayout({
             flex: 1,
             padding: "2rem 1.5rem",
             margin: "0 auto",
-            maxWidth: "900px", // ✅ limits width for large screens
+            maxWidth: "600px", // ✅ limits width for large screens
             width: "100%",
             marginBottom: "60px", // space above navbar
           }}
