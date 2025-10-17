@@ -1,19 +1,21 @@
-import { neon } from '@neondatabase/serverless';
+import Chart from 'chart.js/auto'
+import Link from 'next/link'
 
-export default function Page() {
-  async function create(formData: FormData) {
-    'use server';
-    // Connect to the Neon database
-    const sql = neon(`${process.env.DATABASE_URL}`);
-    const description = formData.get('description');
-    // Insert the comment from the form into the Postgres database
-    await sql`INSERT INTO transactions (description) VALUES (${description})`;
-  }
-
+export default function HomePage() {
   return (
-    <form action={create}>
-      <input type="text" placeholder="write a comment" name="description" />
-      <button type="submit">Submit</button>
-    </form>
-  );
+    <main className="p-10 text-center">
+      <h1 className="text-3xl font-bold mb-8">Finance Tracker</h1>
+      <div className="space-y-4">
+        <Link href="/transactions" className="block text-blue-600 underline">
+          Transactions
+        </Link>
+        <Link href="/budget" className="block text-blue-600 underline">
+          Budget
+        </Link>
+        <Link href="/reports" className="block text-blue-600 underline">
+          Reports
+        </Link>
+      </div>
+    </main>
+  )
 }
