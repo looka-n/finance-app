@@ -26,8 +26,8 @@ export default function TransactionsChart({ labels, values, view }: Props) {
       {
         label: `Spending (${view})`,
         data: values,
-        borderColor: '#4F46E5',
-        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+        borderColor: 'rgba(75, 192, 192, 1)',
+        backgroundColor: 'rgba(75, 192, 192, 0.2)',
         tension: 0.4,
         fill: true,
       },

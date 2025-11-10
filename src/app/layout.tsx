@@ -39,9 +39,9 @@ export default function RootLayout({
             flex: 1,
             padding: "2rem 1.5rem",
             margin: "0 auto",
-            maxWidth: "600px", // ✅ limits width for large screens
+            maxWidth: "600px",
             width: "100%",
-            marginBottom: "60px", // space above navbar
+            marginBottom: "60px",
           }}
         >
           {children}
@@ -60,9 +60,11 @@ export default function RootLayout({
             borderTop: "1px solid #ddd",
           }}
         >
-          <Link href="/">Home</Link>
+          <Link href="/">Dashboard</Link>
+          <Link href="/spending">Spending</Link>
           <Link href="/transactions">Transactions</Link>
-          <Link href="/budgets">Budgets</Link>
+          <Link href="/budgeting">Budgeting</Link>
+          <Link href="/categories">Categories</Link>
         </nav>
       </body>
     </html>
