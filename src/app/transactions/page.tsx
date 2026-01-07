@@ -7,22 +7,23 @@ import { Transaction } from '../utils/aggregateTransactions'
 type SortOption = 'date-new' | 'date-old' | 'amount-high' | 'amount-low' | ''
 
 const PAGE_SIZE = 50
+const NAV_HEIGHT = 64
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [sortOption, setSortOption] = useState<SortOption>('')
+  const [sortOption, setSortOption] = useState<SortOption>('date-new')
   const [showSortMenu, setShowSortMenu] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
 
-  // Reset to page 1 when search changes (small debounce)
+  // Reset to page 1 when search OR sort changes (debounced)
   useEffect(() => {
     const t = setTimeout(() => setPage(1), 250)
     return () => clearTimeout(t)
-  }, [searchTerm])
+  }, [searchTerm, sortOption])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -30,8 +31,10 @@ export default function TransactionsPage() {
     const fetchTransactions = async () => {
       setLoading(true)
       try {
+        const sort = sortOption || 'date-new'
+
         const res = await fetch(
-          `/api/transactions?limit=${PAGE_SIZE}&page=${page}&q=${encodeURIComponent(searchTerm)}`,
+          `/api/transactions?limit=${PAGE_SIZE}&page=${page}&sort=${encodeURIComponent(sort)}&q=${encodeURIComponent(searchTerm)}`,
           { signal: controller.signal }
         )
 
@@ -61,69 +64,43 @@ export default function TransactionsPage() {
 
     fetchTransactions()
     return () => controller.abort()
-  }, [page, searchTerm])
+  }, [page, searchTerm, sortOption])
 
-  const sortedTransactions = useMemo(() => {
-    const list = [...transactions]
-    switch (sortOption) {
-      case 'date-new':
-        list.sort(
-          (a, b) =>
-            new Date(b.transaction_date).getTime() -
-            new Date(a.transaction_date).getTime()
-        )
-        break
-      case 'date-old':
-        list.sort(
-          (a, b) =>
-            new Date(a.transaction_date).getTime() -
-            new Date(b.transaction_date).getTime()
-        )
-        break
-      case 'amount-high':
-        list.sort((a, b) => b.amount - a.amount)
-        break
-      case 'amount-low':
-        list.sort((a, b) => a.amount - b.amount)
-        break
-    }
-    return list
-  }, [transactions, sortOption])
+  const isAmountSort = sortOption === 'amount-high' || sortOption === 'amount-low'
 
-  // Group by month-year (for the current page only)
-  const groupedTransactions = useMemo(() => {
+  // Group by month-year WITHOUT re-sorting (preserve API order)
+  const { groupedTransactions, monthKeys } = useMemo(() => {
     const groups: Record<string, Transaction[]> = {}
-    for (const t of sortedTransactions) {
-      const date = new Date(t.transaction_date)
-      const monthYear = date.toLocaleString('default', {
-        month: 'long',
-        year: 'numeric',
-      })
-      if (!groups[monthYear]) groups[monthYear] = []
-      groups[monthYear].push(t)
+    const keys: string[] = []
+
+    for (const t of transactions) {
+      const d = new Date(t.transaction_date)
+      const monthYear = d.toLocaleString('default', { month: 'long', year: 'numeric' })
+
+      if (!groups[monthYear]) {
+        groups[monthYear] = []
+        keys.push(monthYear) // preserves order of appearance
+      }
+      groups[monthYear].push(t) // preserves order within month from API
     }
-    return groups
-  }, [sortedTransactions])
 
-  const monthKeys = useMemo(() => {
-    return Object.keys(groupedTransactions).sort(
-      (a, b) => new Date(b).getTime() - new Date(a).getTime()
-    )
-  }, [groupedTransactions])
+    return { groupedTransactions: groups, monthKeys: keys }
+  }, [transactions])
 
-  // Pagination window (1 … 4 5 6 … 20)
+  // Pagination window buttons
   const pagesToShow = useMemo(() => {
     const windowSize = 5
     const start = Math.max(1, page - Math.floor(windowSize / 2))
     const end = Math.min(totalPages, start + windowSize - 1)
     const adjustedStart = Math.max(1, end - windowSize + 1)
+
     const pages: number[] = []
     for (let p = adjustedStart; p <= end; p++) pages.push(p)
     return pages
   }, [page, totalPages])
 
   const styles = {
-    container: { maxWidth: '900px', margin: '0 auto' },
+    container: { maxWidth: '900px', marginLeft: 'auto', marginRight: 'auto' } as React.CSSProperties,
     input: {
       width: '100%',
       padding: '0.75rem 1rem',
@@ -171,7 +148,6 @@ export default function TransactionsPage() {
       marginBottom: '1rem',
       border: '1px solid var(--border)',
     } as React.CSSProperties,
-    monthHeader: { color: 'var(--foreground)', margin: 0 } as React.CSSProperties,
     subtleText: { color: 'var(--text-muted)' } as React.CSSProperties,
     dividerTop: {
       borderTop: '1px solid var(--border)',
@@ -183,7 +159,6 @@ export default function TransactionsPage() {
     <div style={styles.container}>
       <h1 className="text-3xl font-bold mb-8">Transactions</h1>
 
-      {/* Search */}
       <input
         type="text"
         placeholder="Search..."
@@ -192,20 +167,9 @@ export default function TransactionsPage() {
         style={styles.input}
       />
 
-      {/* Sort */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          gap: '0.5rem',
-          marginBottom: '1.25rem',
-        }}
-      >
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '1.25rem' }}>
         <div style={{ position: 'relative' }}>
-          <button
-            onClick={() => setShowSortMenu(prev => !prev)}
-            style={styles.button()}
-          >
+          <button onClick={() => setShowSortMenu(v => !v)} style={styles.button()}>
             Sort
           </button>
 
@@ -225,8 +189,7 @@ export default function TransactionsPage() {
                   }}
                   style={{
                     ...styles.menuItem(sortOption === opt.value),
-                    borderBottom:
-                      idx === arr.length - 1 ? 'none' : '1px solid var(--border)',
+                    borderBottom: idx === arr.length - 1 ? 'none' : '1px solid var(--border)',
                   }}
                 >
                   {opt.label}
@@ -235,70 +198,31 @@ export default function TransactionsPage() {
             </div>
           )}
         </div>
-
-        {/* Placeholder for Filter */}
-        <button style={styles.button()} disabled>
-          Filter
-        </button>
       </div>
 
-      {/* List */}
       {loading ? (
         <div style={{ textAlign: 'center', marginTop: '3rem' }}>
-          <div
-            style={{
-              width: '100%',
-              height: '6px',
-              background: 'var(--surface-muted)',
-              borderRadius: '999px',
-              overflow: 'hidden',
-              position: 'relative',
-              border: '1px solid var(--border)',
-            }}
-          >
-            <div
-              style={{
-                width: '40%',
-                height: '100%',
-                background: 'var(--primary)',
-                position: 'absolute',
-                left: 0,
-                animation: 'loadingBar 1.2s ease-in-out infinite',
-              }}
-            />
-          </div>
-          <p style={{ marginTop: '1rem', ...styles.subtleText }}>
-            Loading transactions...
-          </p>
-
-          <style jsx>{`
-            @keyframes loadingBar {
-              0% {
-                left: -40%;
-              }
-              50% {
-                left: 20%;
-              }
-              100% {
-                left: 100%;
-              }
-            }
-          `}</style>
+          <p style={styles.subtleText}>Loading transactions...</p>
         </div>
       ) : (
         <>
-          {monthKeys.map(month => (
-            <div key={month} style={{ marginBottom: '2rem' }}>
-              <div style={styles.monthHeaderWrap}>
-                <h2 className="text-2xl font-semibold" style={styles.monthHeader}>
-                  {month}
-                </h2>
+          {isAmountSort ? (
+            // For amount sort: show current page in global amount order
+            <TransactionsList transactions={transactions} />
+          ) : (
+            // For date sort: month buckets shown in correct global order (old->new or new->old)
+            monthKeys.map(month => (
+              <div key={month} style={{ marginBottom: '2rem' }}>
+                <div style={styles.monthHeaderWrap}>
+                  <h2 className="text-2xl font-semibold" style={{ margin: 0 }}>
+                    {month}
+                  </h2>
+                </div>
+                <TransactionsList transactions={groupedTransactions[month]} />
               </div>
-              <TransactionsList transactions={groupedTransactions[month]} />
-            </div>
-          ))}
+            ))
+          )}
 
-          {/* Pagination */}
           <div
             style={{
               ...styles.dividerTop,
@@ -307,6 +231,7 @@ export default function TransactionsPage() {
               alignItems: 'center',
               gap: '0.5rem',
               padding: '1.5rem 0 2rem',
+              marginBottom: NAV_HEIGHT,
             }}
           >
             <button
