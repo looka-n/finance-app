@@ -14,14 +14,17 @@ type Props = {
 
 export default function TransactionsList({ transactions }: Props) {
   return (
-    <ul style={{ marginTop: '2rem', listStyle: 'none', padding: 0 }}>
+    <ul style={{ marginTop: '1.5rem', listStyle: 'none', padding: 0 }}>
       {transactions.map(t => {
         const isDeposit = t.amount > 0
-        const formattedDate = new Date(t.transaction_date).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
+        const formattedDate = new Date(t.transaction_date).toLocaleDateString(
+          'en-US',
+          {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          }
+        )
         const category = t.category?.trim() || 'UNCATEGORIZED'
 
         return (
@@ -32,17 +35,38 @@ export default function TransactionsList({ transactions }: Props) {
               justifyContent: 'space-between',
               alignItems: 'center',
               padding: '1rem 0',
-              borderBottom: '1px solid #eee',
+              borderBottom: '1px solid var(--border)',
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <span style={{ fontWeight: 600, fontSize: '1rem' }}>{t.description}</span>
-              <span style={{ fontSize: '0.9rem', color: '#666' }}>{formattedDate}</span>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.25rem',
+              }}
+            >
+              <span
+                style={{
+                  fontWeight: 700,
+                  fontSize: '1rem',
+                  color: 'var(--foreground)',
+                }}
+              >
+                {t.description}
+              </span>
+
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                {formattedDate}
+              </span>
+
               <span
                 style={{
                   fontSize: '0.85rem',
-                  fontWeight: 500,
-                  color: category === 'UNCATEGORIZED' ? '#999' : '#4F46E5',
+                  fontWeight: 600,
+                  color:
+                    category === 'UNCATEGORIZED'
+                      ? 'var(--text-muted)'
+                      : 'var(--primary)',
                 }}
               >
                 {category}
@@ -52,8 +76,8 @@ export default function TransactionsList({ transactions }: Props) {
             <div
               style={{
                 fontSize: '1rem',
-                fontWeight: 600,
-                color: isDeposit ? '#888' : '#000',
+                fontWeight: 800,
+                color: isDeposit ? 'var(--positive)' : 'var(--foreground)',
                 textAlign: 'right',
               }}
             >
