@@ -60,11 +60,11 @@ export default function RootLayout({
             borderTop: "1px solid #ddd",
           }}
         >
-          <Link href="/">Dashboard</Link>
-          <Link href="/spending">Spending</Link>
+          {/* <Link href="/">Dashboard</Link>
+          <Link href="/spending">Spending</Link> */}
           <Link href="/transactions">Transactions</Link>
-          <Link href="/budgeting">Budgeting</Link>
-          <Link href="/categories">Categories</Link>
+          {/* <Link href="/budgeting">Budgeting</Link>
+          <Link href="/categories">Categories</Link> */}
         </nav>
       </body>
     </html>

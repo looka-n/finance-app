@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import TransactionsList from '../components/TransactionsList'
 import { Transaction } from '../utils/aggregateTransactions'
 
 type SortOption = 'date-new' | 'date-old' | 'amount-high' | 'amount-low' | ''
+
+const PAGE_SIZE = 50
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -13,39 +15,56 @@ export default function TransactionsPage() {
   const [showSortMenu, setShowSortMenu] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+
   useEffect(() => {
+    const t = setTimeout(() => setPage(1), 250)
+    return () => clearTimeout(t)
+  }, [searchTerm])
+
+  useEffect(() => {
+    const controller = new AbortController()
+
     const fetchTransactions = async () => {
       setLoading(true)
-      const res = await fetch('/api/transactions')
-      if (!res.ok) return
-      const data = await res.json()
+      try {
+        const res = await fetch(
+          `/api/transactions?limit=${PAGE_SIZE}&page=${page}&q=${encodeURIComponent(searchTerm)}`,
+          { signal: controller.signal }
+        )
 
-      const parsed: Transaction[] = data.map((d: any) => ({
-        id: d.id,
-        description: d.description,
-        transaction_date: d.transaction_date,
-        category: d.category,
-        amount: d.amount == null ? 0 : Number(d.amount),
-      }))
+        if (!res.ok) {
+          console.error('Fetch failed:', res.status, await res.text())
+          setTransactions([])
+          setTotalPages(1)
+          return
+        }
 
-      setTransactions(parsed)
-      setLoading(false)
+        const data = await res.json()
+
+        const parsed: Transaction[] = (data.rows ?? []).map((d: any) => ({
+          id: d.id,
+          description: d.description,
+          transaction_date: d.transaction_date,
+          category: d.category,
+          amount: d.amount == null ? 0 : Number(d.amount),
+        }))
+
+        setTransactions(parsed)
+        setTotalPages(Number(data.totalPages ?? 1))
+      } finally {
+        setLoading(false)
+      }
     }
 
     fetchTransactions()
-  }, [])
+    return () => controller.abort()
+  }, [page, searchTerm])
 
-  const filteredTransactions = useMemo(() => {
-    let list = [...transactions]
+  const sortedTransactions = useMemo(() => {
+    const list = [...transactions]
 
-    // Search
-    if (searchTerm.trim()) {
-      list = list.filter(t =>
-        t.description.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    }
-
-    // Sort
     switch (sortOption) {
       case 'date-new':
         list.sort(
@@ -70,19 +89,18 @@ export default function TransactionsPage() {
     }
 
     return list
-  }, [transactions, searchTerm, sortOption])
+  }, [transactions, sortOption])
 
-  // Group by month-year
   const groupedTransactions = useMemo(() => {
     const groups: Record<string, Transaction[]> = {}
-    for (const t of filteredTransactions) {
+    for (const t of sortedTransactions) {
       const date = new Date(t.transaction_date)
       const monthYear = date.toLocaleString('default', { month: 'long', year: 'numeric' })
       if (!groups[monthYear]) groups[monthYear] = []
       groups[monthYear].push(t)
     }
     return groups
-  }, [filteredTransactions])
+  }, [sortedTransactions])
 
   const monthKeys = useMemo(() => {
     return Object.keys(groupedTransactions).sort(
@@ -90,11 +108,21 @@ export default function TransactionsPage() {
     )
   }, [groupedTransactions])
 
+  const pagesToShow = useMemo(() => {
+    const windowSize = 5
+    const start = Math.max(1, page - Math.floor(windowSize / 2))
+    const end = Math.min(totalPages, start + windowSize - 1)
+    const adjustedStart = Math.max(1, end - windowSize + 1)
+
+    const pages: number[] = []
+    for (let p = adjustedStart; p <= end; p++) pages.push(p)
+    return pages
+  }, [page, totalPages])
+
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
       <h1 className="text-3xl font-bold mb-8">Transactions</h1>
 
-      {/* Search bar */}
       <input
         type="text"
         placeholder="Search..."
@@ -110,9 +138,7 @@ export default function TransactionsPage() {
         }}
       />
 
-      {/* Sort/Filter */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '1.5rem' }}>
-        {/* Sort */}
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setShowSortMenu(prev => !prev)}
@@ -163,84 +189,113 @@ export default function TransactionsPage() {
             </div>
           )}
         </div>
-
-        {/* Filter */}
-        <button
-          style={{
-            padding: '0.5rem 1rem',
-            borderRadius: '8px',
-            border: '1px solid #ccc',
-            background: '#f9f9f9',
-            cursor: 'pointer',
-          }}
-        >
-          Filter
-        </button>
       </div>
 
-      {/* Transaction list */}
       {loading ? (
         <div style={{ textAlign: 'center', marginTop: '3rem' }}>
-          <div
-            style={{
-              width: '100%',
-              height: '6px',
-              background: '#e5e7eb',
-              borderRadius: '4px',
-              overflow: 'hidden',
-              position: 'relative',
-            }}
-          >
-            <div
-              style={{
-                width: '40%',
-                height: '100%',
-                background: '#6366F1', // Indigo tone for consistency
-                position: 'absolute',
-                left: 0,
-                animation: 'loadingBar 1.2s ease-in-out infinite',
-              }}
-            />
-          </div>
-          <p style={{ marginTop: '1rem', color: '#6b7280' }}>
-            Loading transactions...
-          </p>
-
-          <style jsx>{`
-            @keyframes loadingBar {
-              0% {
-                left: -40%;
-              }
-              50% {
-                left: 20%;
-              }
-              100% {
-                left: 100%;
-              }
-            }
-          `}</style>
+          <p style={{ marginTop: '1rem', color: '#6b7280' }}>Loading transactions...</p>
         </div>
       ) : (
-        monthKeys.map(month => (
-          <div key={month} style={{ marginBottom: '2rem' }}>
-            <div
+        <>
+          {monthKeys.map(month => (
+            <div key={month} style={{ marginBottom: '2rem' }}>
+              <div
+                style={{
+                  backgroundColor: '#f9fafb',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  marginBottom: '1rem',
+                }}
+              >
+                <h2 className="text-2xl font-semibold" style={{ color: '#374151', margin: 0 }}>
+                  {month}
+                </h2>
+              </div>
+              <TransactionsList transactions={groupedTransactions[month]} />
+            </div>
+          ))}
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '1.5rem 0 2rem',
+              borderTop: '1px solid #eee',
+              marginTop: '1rem',
+            }}
+          >
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
               style={{
-                backgroundColor: '#f9fafb',
-                padding: '0.75rem 1rem',
+                padding: '0.5rem 0.75rem',
                 borderRadius: '8px',
-                marginBottom: '1rem',
+                border: '1px solid #ccc',
+                background: page === 1 ? '#f3f4f6' : '#fff',
+                cursor: page === 1 ? 'not-allowed' : 'pointer',
               }}
             >
-              <h2
-                className="text-2xl font-semibold"
-                style={{ color: '#374151', margin: 0 }}
+              Prev
+            </button>
+
+            {page > 3 && totalPages > 6 && (
+              <>
+                <button
+                  onClick={() => setPage(1)}
+                  style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #ccc', background: '#fff' }}
+                >
+                  1
+                </button>
+                <span style={{ color: '#6b7280' }}>…</span>
+              </>
+            )}
+
+            {pagesToShow.map(p => (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '8px',
+                  border: '1px solid #ccc',
+                  background: p === page ? '#4F46E5' : '#fff',
+                  color: p === page ? '#fff' : '#111',
+                  cursor: 'pointer',
+                }}
               >
-                {month}
-              </h2>
-            </div>
-            <TransactionsList transactions={groupedTransactions[month]} />
+                {p}
+              </button>
+            ))}
+
+            {page < totalPages - 2 && totalPages > 6 && (
+              <>
+                <span style={{ color: '#6b7280' }}>…</span>
+                <button
+                  onClick={() => setPage(totalPages)}
+                  style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #ccc', background: '#fff' }}
+                >
+                  {totalPages}
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              style={{
+                padding: '0.5rem 0.75rem',
+                borderRadius: '8px',
+                border: '1px solid #ccc',
+                background: page >= totalPages ? '#f3f4f6' : '#fff',
+                cursor: page >= totalPages ? 'not-allowed' : 'pointer',
+              }}
+            >
+              Next
+            </button>
           </div>
-        ))
+        </>
       )}
     </div>
   )
