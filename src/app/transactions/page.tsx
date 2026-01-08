@@ -1,14 +1,9 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import TransactionsClient from "./TransactionsClient";
+import { auth } from "@/lib/auth/server";
 
 export default async function TransactionsPage() {
-  const cookieStore = await cookies();
-  const authed = cookieStore.get("app_session")?.value === "ok";
-
-  if (!authed) {
-    redirect("/login?next=/transactions");
-  }
-
+  const { data } = await auth.getSession();
+  if (!data?.session) redirect("/auth/sign-in");
   return <TransactionsClient />;
 }

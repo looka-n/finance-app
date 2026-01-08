@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import LogoutButton from "./components/LogoutButton";
+import Providers from "./providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable}`}
         style={{
@@ -53,7 +53,7 @@ export default function RootLayout({
             paddingBottom: "96px",
           }}
         >
-          {children}
+          <Providers>{children}</Providers>
         </main>
 
         <nav
@@ -73,7 +73,8 @@ export default function RootLayout({
         >
           <NavLink href="/">Dashboard</NavLink>
           <NavLink href="/transactions">Transactions</NavLink>
-          <LogoutButton />
+          <NavLink href="/auth/sign-in">Sign in</NavLink>
+          <NavLink href="/logout">Sign out</NavLink>
         </nav>
       </body>
     </html>

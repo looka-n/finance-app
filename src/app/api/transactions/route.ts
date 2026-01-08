@@ -1,89 +1,73 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@vercel/postgres";
+import { neon } from "@neondatabase/serverless";
+import { neonAuth } from "@neondatabase/auth/next/server";
 
 type SortOption = "date-new" | "date-old" | "amount-high" | "amount-low";
 
 export async function GET(req: NextRequest) {
-  const authed = req.cookies.get("app_session")?.value === "ok";
-  if (!authed) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  
-  const sp = req.nextUrl.searchParams;
-
-  const q = (sp.get("q") ?? "").trim();
-  const sort = (sp.get("sort") ?? "date-new") as SortOption;
-
-  const limit = Math.min(Number(sp.get("limit") ?? 50), 200);
-  const page = Math.max(Number(sp.get("page") ?? 1), 1);
-  const offset = (page - 1) * limit;
-
   try {
-    // Count for pagination
+    const { session, user } = await neonAuth();
+    if (!session || !user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const sql = neon(process.env.POSTGRES_URL!);
+
+    await sql`SELECT set_config('app.user_id', ${user.id}, true)`;
+    
+    const sp = req.nextUrl.searchParams;
+    const q = (sp.get("q") ?? "").trim();
+    const sort = (sp.get("sort") ?? "date-new") as SortOption;
+
+    const limit = Math.min(Number(sp.get("limit") ?? 50), 200);
+    const page = Math.max(Number(sp.get("page") ?? 1), 1);
+    const offset = (page - 1) * limit;
+
+    const hasQ = q.length > 0;
+    const like = `%${q}%`;
+
+    const orderBy =
+      sort === "date-old"
+        ? "transaction_date ASC"
+        : sort === "amount-high"
+        ? "amount DESC"
+        : sort === "amount-low"
+        ? "amount ASC"
+        : "transaction_date DESC";
+
     const countRes = await sql`
       SELECT COUNT(*)::int AS total
       FROM transactions
-      WHERE (${q} = '' OR description ILIKE ${"%" + q + "%"})
+      WHERE owner_id = ${user.id}
+        AND (
+          ${!hasQ}
+          OR description ILIKE ${like}
+          OR category ILIKE ${like}
+        )
     `;
-    const total = countRes.rows[0]?.total ?? 0;
+
+    const total = Number(countRes[0]?.total ?? 0);
     const totalPages = Math.max(1, Math.ceil(total / limit));
 
-    let rowsRes;
+    const rows = await sql`
+      SELECT id, description, transaction_date, category, amount
+      FROM transactions
+      WHERE owner_id = ${user.id}
+        AND (
+          ${!hasQ}
+          OR description ILIKE ${like}
+          OR category ILIKE ${like}
+        )
+      ORDER BY ${sql.unsafe(orderBy)}
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `;
 
-    // ⚠️ Explicit branches (no sql fragment reuse)
-    if (sort === "date-old") {
-      rowsRes = await sql`
-        SELECT id, description, transaction_date, category, amount
-        FROM transactions
-        WHERE (${q} = '' OR description ILIKE ${"%" + q + "%"})
-        ORDER BY transaction_date ASC, id ASC
-        LIMIT ${limit}
-        OFFSET ${offset}
-      `;
-    } else if (sort === "amount-high") {
-      rowsRes = await sql`
-        SELECT id, description, transaction_date, category, amount
-        FROM transactions
-        WHERE (${q} = '' OR description ILIKE ${"%" + q + "%"})
-        ORDER BY (NULLIF(amount::text, '')::numeric) DESC NULLS LAST,
-                 transaction_date DESC, id DESC
-        LIMIT ${limit}
-        OFFSET ${offset}
-      `;
-    } else if (sort === "amount-low") {
-      rowsRes = await sql`
-        SELECT id, description, transaction_date, category, amount
-        FROM transactions
-        WHERE (${q} = '' OR description ILIKE ${"%" + q + "%"})
-        ORDER BY (NULLIF(amount::text, '')::numeric) ASC NULLS LAST,
-                 transaction_date DESC, id DESC
-        LIMIT ${limit}
-        OFFSET ${offset}
-      `;
-    } else {
-      // date-new (default)
-      rowsRes = await sql`
-        SELECT id, description, transaction_date, category, amount
-        FROM transactions
-        WHERE (${q} = '' OR description ILIKE ${"%" + q + "%"})
-        ORDER BY transaction_date DESC, id DESC
-        LIMIT ${limit}
-        OFFSET ${offset}
-      `;
-    }
-
-    return NextResponse.json({
-      rows: rowsRes.rows,
-      total,
-      totalPages,
-      page,
-      pageSize: limit,
-      sort,
-    });
-  } catch (err) {
-    console.error("GET /api/transactions failed:", err);
+    return NextResponse.json({ rows, totalPages, page, total });
+  } catch (err: any) {
+    console.error("api/transactions error:", err);
     return NextResponse.json(
-      { error: "Failed to fetch transactions" },
+      { error: "Server error", detail: err?.message ?? String(err) },
       { status: 500 }
     );
   }
