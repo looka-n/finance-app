@@ -3,16 +3,10 @@ import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
+import { neonAuth } from "@neondatabase/auth/next/server";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Finance Tracker",
@@ -21,11 +15,13 @@ export const metadata: Metadata = {
 
 const NAV_HEIGHT = 64;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user } = await neonAuth();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -39,17 +35,14 @@ export default function RootLayout({
           color: "var(--foreground)",
         }}
       >
-        
         <main
           style={{
             flex: 1,
             padding: "2rem 1.5rem",
             maxWidth: "600px",
             width: "100%",
-
             marginLeft: "auto",
             marginRight: "auto",
-
             paddingBottom: "96px",
           }}
         >
@@ -73,21 +66,19 @@ export default function RootLayout({
         >
           <NavLink href="/">Dashboard</NavLink>
           <NavLink href="/transactions">Transactions</NavLink>
-          <NavLink href="/auth/sign-in">Sign in</NavLink>
-          <NavLink href="/logout">Sign out</NavLink>
+
+          {!user ? (
+            <NavLink href="/auth/sign-in">Sign in</NavLink>
+          ) : (
+            <NavLink href="/logout">Sign out</NavLink>
+          )}
         </nav>
       </body>
     </html>
   );
 }
 
-function NavLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <Link
       href={href}

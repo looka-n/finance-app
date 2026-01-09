@@ -71,3 +71,41 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Neon AuthView theme alignment */
+.neon-auth {
+  --neon-bg: var(--background);
+  --neon-fg: var(--foreground);
+  --neon-border: var(--border);
+  --neon-muted: var(--text-muted);
+  --neon-primary: var(--primary);
+}
+
+/* Card + layout */
+.neon-auth form {
+  background: var(--background);
+}
+
+/* Inputs */
+.neon-auth input {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  border-radius: 0.75rem;
+}
+
+/* Primary buttons */
+.neon-auth button[type="submit"] {
+  background: var(--primary);
+  color: white;
+  border-radius: 0.75rem;
+}
+
+.neon-auth button[type="submit"]:hover {
+  background: var(--primary-hover);
+}
+
+/* Links */
+.neon-auth a {
+  color: var(--primary);
+}
